@@ -1,10 +1,11 @@
-package providers
+package auth
 
 import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	"github.com/presidendjakarta/setu-gateway/internal/auth/providers"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
 	"github.com/presidendjakarta/setu-gateway/pkg/types"
 )
@@ -19,7 +20,7 @@ func setupTestLogger(t *testing.T) *logger.Logger {
 
 func TestJWTProvider_ExtractTokenFromHeader(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewJWTProvider("test-jwt", types.AuthConfig{}, log)
+	provider := providers.providers.NewJWTProvider("test-jwt", types.AuthConfig{}, log)
 
 	// Create request with Bearer token
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -39,7 +40,7 @@ func TestJWTProvider_ExtractTokenFromHeader(t *testing.T) {
 
 func TestJWTProvider_ExtractTokenMissing(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewJWTProvider("test-jwt", types.AuthConfig{}, log)
+	provider := providers.NewJWTProvider("test-jwt", types.AuthConfig{}, log)
 
 	// Create request without token
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -63,7 +64,7 @@ func TestJWTProvider_ExtractTokenMissing(t *testing.T) {
 
 func TestAPIKeyProvider_ExtractFromHeader(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
+	provider := providers.NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
 
 	// Create request with API key
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -85,7 +86,7 @@ func TestAPIKeyProvider_ExtractFromCustomHeader(t *testing.T) {
 	config := types.AuthConfig{
 		HeaderName: "X-Custom-Key",
 	}
-	provider := NewAPIKeyProvider("test-apikey", config, log)
+	provider := providers.NewAPIKeyProvider("test-apikey", config, log)
 
 	// Create request with custom header
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -103,7 +104,7 @@ func TestAPIKeyProvider_WithPrefix(t *testing.T) {
 		HeaderName: "X-API-Key",
 		Prefix:     "Bearer ",
 	}
-	provider := NewAPIKeyProvider("test-apikey", config, log)
+	provider := providers.NewAPIKeyProvider("test-apikey", config, log)
 
 	// Create request with prefixed key
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -123,7 +124,7 @@ func TestAPIKeyProvider_WithPrefix(t *testing.T) {
 
 func TestAPIKeyProvider_MissingKey(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
+	provider := providers.NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
 
 	// Create request without API key
 	req := httptest.NewRequest("GET", "/test", nil)
@@ -137,7 +138,7 @@ func TestAPIKeyProvider_MissingKey(t *testing.T) {
 
 func TestJWTProvider_ValidateConfig(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewJWTProvider("test-jwt", types.AuthConfig{}, log)
+	provider := providers.NewJWTProvider("test-jwt", types.AuthConfig{}, log)
 
 	// Test missing secret and JWKS
 	err := provider.Validate(types.AuthConfig{})
@@ -164,7 +165,7 @@ func TestJWTProvider_ValidateConfig(t *testing.T) {
 
 func TestAPIKeyProvider_ValidateConfig(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
+	provider := providers.NewAPIKeyProvider("test-apikey", types.AuthConfig{}, log)
 
 	// Should always pass (sets default header name)
 	err := provider.Validate(types.AuthConfig{})
@@ -175,7 +176,7 @@ func TestAPIKeyProvider_ValidateConfig(t *testing.T) {
 
 func TestJWTProvider_NameAndType(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewJWTProvider("my-jwt-provider", types.AuthConfig{}, log)
+	provider := providers.NewJWTProvider("my-jwt-provider", types.AuthConfig{}, log)
 
 	if provider.Name() != "my-jwt-provider" {
 		t.Errorf("Expected name 'my-jwt-provider', got %s", provider.Name())
@@ -188,7 +189,7 @@ func TestJWTProvider_NameAndType(t *testing.T) {
 
 func TestAPIKeyProvider_NameAndType(t *testing.T) {
 	log := setupTestLogger(t)
-	provider := NewAPIKeyProvider("my-apikey-provider", types.AuthConfig{}, log)
+	provider := providers.NewAPIKeyProvider("my-apikey-provider", types.AuthConfig{}, log)
 
 	if provider.Name() != "my-apikey-provider" {
 		t.Errorf("Expected name 'my-apikey-provider', got %s", provider.Name())

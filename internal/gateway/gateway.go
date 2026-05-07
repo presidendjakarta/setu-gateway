@@ -16,6 +16,7 @@ import (
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
 	"github.com/presidendjakarta/setu-gateway/internal/middleware"
 	"github.com/presidendjakarta/setu-gateway/internal/proxy"
+	"github.com/presidendjakarta/setu-gateway/internal/ratelimiter"
 	"github.com/presidendjakarta/setu-gateway/internal/router"
 	"github.com/presidendjakarta/setu-gateway/pkg/types"
 )
@@ -30,6 +31,7 @@ type Gateway struct {
 	lbsMu      sync.RWMutex
 	mwChain    *middleware.Chain
 	authMgr    *authpkg.Manager
+	rateLimiter *ratelimiter.Manager
 }
 
 // New creates a new gateway instance
@@ -58,6 +60,9 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	authMiddleware := middleware.NewAuth(authMgr, log)
 	mwChain.Use(authMiddleware)
 
+	// Create rate limiter manager
+	rateLimiterMgr := ratelimiter.NewManager(log)
+
 	return &Gateway{
 		router:  r,
 		proxy:   p,
@@ -66,6 +71,7 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 		lbs:     make(map[string]*loadbalancer.RoundRobin),
 		mwChain: mwChain,
 		authMgr: authMgr,
+		rateLimiter: rateLimiterMgr,
 	}, nil
 }
 

@@ -226,6 +226,15 @@ type AuthResult struct {
 // AuthResultKey is the context key for auth result
 type AuthResultKey struct{}
 
+// RateLimitConfig holds rate limiting configuration
+type RateLimitConfig struct {
+	ID       string        `json:"id" db:"id"`
+	Name     string        `json:"name" db:"name"`
+	Requests int           `json:"requests" db:"requests"`
+	Window   time.Duration `json:"window" db:"window"`
+	KeyBy    string        `json:"key_by" db:"key_by"` // ip, user, api_key
+}
+
 // GatewayContext extends context.Context with request-specific data
 type GatewayContext interface {
 	context.Context
