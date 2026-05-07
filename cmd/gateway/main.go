@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/presidendjakarta/setu-gateway/internal/admin"
 	"github.com/presidendjakarta/setu-gateway/internal/config"
 	"github.com/presidendjakarta/setu-gateway/internal/database"
 	"github.com/presidendjakarta/setu-gateway/internal/gateway"
@@ -156,7 +157,17 @@ func main() {
 
 	// Start admin server if enabled
 	if rawConfig.Admin.Enabled {
-		go startAdminServer(rawConfig, log)
+		// Create repositories
+		pool := db.Pool()
+		routeRepo := postgres.NewRouteRepository(pool)
+		upstreamRepo := postgres.NewUpstreamRepository(pool)
+		targetRepo := postgres.NewTargetRepository(pool)
+		rateLimitRepo := postgres.NewRateLimitRepository(pool)
+
+		// Create admin handler
+		adminHandler := admin.NewHandler(routeRepo, upstreamRepo, targetRepo, rateLimitRepo, log)
+
+		go startAdminServer(rawConfig, log, adminHandler)
 	}
 
 	// Start metrics server if enabled
@@ -185,15 +196,19 @@ func main() {
 }
 
 // startAdminServer starts the admin API server
-func startAdminServer(cfg *config.RawConfig, log *logger.Logger) {
+func startAdminServer(cfg *config.RawConfig, log *logger.Logger, adminHandler *admin.Handler) {
 	addr := fmt.Sprintf("%s:%d", cfg.Admin.Host, cfg.Admin.Port)
 	
 	mux := http.NewServeMux()
 	
-	// Admin routes will be added here
+	// Register admin API routes
+	adminHandler.RegisterRoutes(mux)
+	
+	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		w.Write([]byte(`{"status":"healthy"}`))
 	})
 
 	srv := &http.Server{
