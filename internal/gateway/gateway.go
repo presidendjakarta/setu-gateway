@@ -16,6 +16,7 @@ import (
 	"github.com/presidendjakarta/setu-gateway/internal/loadbalancer"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
 	"github.com/presidendjakarta/setu-gateway/internal/middleware"
+	"github.com/presidendjakarta/setu-gateway/internal/observability"
 	"github.com/presidendjakarta/setu-gateway/internal/proxy"
 	"github.com/presidendjakarta/setu-gateway/internal/ratelimiter"
 	"github.com/presidendjakarta/setu-gateway/internal/router"
@@ -24,20 +25,22 @@ import (
 
 // Gateway is the main gateway handler
 type Gateway struct {
-	router        *router.Router
-	proxy         *proxy.Proxy
-	config        *config.RawConfig
-	logger        *logger.Logger
-	lbs           map[string]*loadbalancer.RoundRobin
-	lbsMu         sync.RWMutex
-	mwChain       *middleware.Chain
-	authMgr       *authpkg.Manager
-	rateLimiter   *ratelimiter.Manager
+	router         *router.Router
+	proxy          *proxy.Proxy
+	config         *config.RawConfig
+	logger         *logger.Logger
+	lbs            map[string]*loadbalancer.RoundRobin
+	lbsMu          sync.RWMutex
+	mwChain        *middleware.Chain
+	authMgr        *authpkg.Manager
+	rateLimiter    *ratelimiter.Manager
 	circuitBreaker *circuitbreaker.Manager
+	metrics        *observability.Metrics
+	healthChecker  *observability.HealthChecker
 }
 
 // New creates a new gateway instance
-func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
+func New(cfg *config.RawConfig, log *logger.Logger, metrics *observability.Metrics, healthChecker *observability.HealthChecker) (*Gateway, error) {
 	// Create router
 	r := router.New()
 
@@ -49,6 +52,12 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	mwChain.Use(middleware.NewRecovery(log))
 	mwChain.Use(middleware.NewRequestID())
 	mwChain.Use(middleware.NewLogger(log))
+	
+	// Add metrics middleware if metrics is provided
+	if metrics != nil {
+		mwChain.Use(observability.MetricsMiddleware(metrics))
+	}
+	
 	mwChain.Use(middleware.NewCORS())
 
 	// Create auth manager
@@ -69,15 +78,17 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	circuitBreakerMgr := circuitbreaker.NewManager(log)
 
 	return &Gateway{
-		router:        r,
-		proxy:         p,
-		config:        cfg,
-		logger:        log,
-		lbs:           make(map[string]*loadbalancer.RoundRobin),
-		mwChain:       mwChain,
-		authMgr:       authMgr,
-		rateLimiter:   rateLimiterMgr,
+		router:         r,
+		proxy:          p,
+		config:         cfg,
+		logger:         log,
+		lbs:            make(map[string]*loadbalancer.RoundRobin),
+		mwChain:        mwChain,
+		authMgr:        authMgr,
+		rateLimiter:    rateLimiterMgr,
 		circuitBreaker: circuitBreakerMgr,
+		metrics:        metrics,
+		healthChecker:  healthChecker,
 	}, nil
 }
 
@@ -105,20 +116,6 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) {
 	// Set gateway header
 	w.Header().Set("X-Gateway", "setu-gateway")
 
-	// Health check endpoints (don't require routing)
-	if r.URL.Path == g.config.Health.Path || 
-	   r.URL.Path == g.config.Health.ReadinessPath || 
-	   r.URL.Path == g.config.Health.LivenessPath {
-		g.handleHealth(w, r)
-		return
-	}
-
-	// Metrics endpoint
-	if g.config.Metrics.Enabled && r.URL.Path == g.config.Metrics.Path {
-		g.handleMetrics(w, r)
-		return
-	}
-
 	// Match route
 	route, err := g.router.Match(r)
 	if err != nil {
@@ -129,6 +126,14 @@ func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) {
 		)
 		g.writeError(w, types.ErrRouteNotFound)
 		return
+	}
+
+	// Record route match metrics and set route info in context
+	if g.metrics != nil {
+		g.metrics.RecordRouteMatch(route.ID, route.Name)
+		// Set route info in context for metrics middleware
+		ctx = observability.SetRouteInfo(ctx, route.ID, route.Name)
+		r = r.WithContext(ctx)
 	}
 
 	g.logger.Debugw("Route matched",
@@ -226,26 +231,6 @@ func (g *Gateway) getLoadBalancer(upstreamID string) (*loadbalancer.RoundRobin, 
 	g.lbs[upstreamID] = lb
 
 	return lb, nil
-}
-
-// handleHealth handles health check requests
-func (g *Gateway) handleHealth(w http.ResponseWriter, r *http.Request) {
-	health := map[string]interface{}{
-		"status": "ok",
-		"timestamp": time.Now().UTC().Format(time.RFC3339),
-		"version": g.config.Gateway.Version,
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(health)
-}
-
-// handleMetrics handles metrics requests (placeholder)
-func (g *Gateway) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("# Metrics endpoint - Prometheus integration required"))
 }
 
 // writeError writes a structured error response

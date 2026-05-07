@@ -74,18 +74,6 @@ func main() {
 
 	log.Infow("Routes loaded from database", "count", len(routes))
 
-	// Initialize gateway
-	gw, err := gateway.New(rawConfig, log)
-	if err != nil {
-		log.Fatalw("Failed to initialize gateway", "error", err)
-	}
-	defer gw.Close()
-
-	// Reload routes into router
-	if err := gw.ReloadRoutes(ctx, routes); err != nil {
-		log.Fatalw("Failed to reload routes", "error", err)
-	}
-
 	// Initialize observability
 	metrics := observability.NewMetrics()
 	healthChecker := observability.NewHealthChecker()
@@ -118,6 +106,18 @@ func main() {
 			metrics.UpdateGoroutines(0) // Will be implemented
 		}
 	}()
+
+	// Initialize gateway
+	gw, err := gateway.New(rawConfig, log, metrics, healthChecker)
+	if err != nil {
+		log.Fatalw("Failed to initialize gateway", "error", err)
+	}
+	defer gw.Close()
+
+	// Reload routes into router
+	if err := gw.ReloadRoutes(ctx, routes); err != nil {
+		log.Fatalw("Failed to reload routes", "error", err)
+	}
 
 	// Start config watcher for hot-reload
 	if err := cfg.Watch(configPath); err != nil {
