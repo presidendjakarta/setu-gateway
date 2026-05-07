@@ -1,0 +1,91 @@
+# .air.toml - Air live reload configuration
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Build command
+cmd = "go build -o ./tmp/setu-gateway.exe ./cmd/gateway"
+
+# Binary file to run
+bin = "./tmp/setu-gateway.exe"
+
+# Additional arguments to pass to the binary
+full_bin = "./tmp/setu-gateway.exe"
+
+# Watch these file extensions
+include_ext = ["go", "yaml", "yml", "json"]
+
+# Exclude directories
+exclude_dir = [
+  "tmp",
+  "vendor",
+  "testdata",
+  "web",
+  "docs",
+  ".git",
+]
+
+# Exclude files
+exclude_file = []
+
+# Exclude specific regex patterns
+exclude_regex = ["_test\\.go"]
+
+# Exclude unchanged files
+exclude_unchanged = false
+
+# Follow symlink
+follow_symlink = true
+
+# Log file for air
+log = "air.log"
+
+# Poll files for changes (useful on Windows/WSL)
+poll = false
+
+# Poll interval (ms)
+poll_interval = 500
+
+# Delay after file change before rebuild (ms)
+delay = 1000
+
+# Stop running binary before rebuild
+stop_on_error = true
+
+# Send interrupt signal before kill
+send_interrupt = true
+
+# Kill delay after interrupt (ms)
+kill_delay = 2000
+
+# Rerun binary after build
+rerun = true
+
+# Run arguments (empty means use full_bin)
+args_bin = []
+
+# Watch for additional directories
+# This will watch configs/ directory for YAML changes
+[[build.watch]]
+path = "./configs"
+
+[log]
+# Show air logs
+time = true
+main_only = false
+level = "debug"
+
+[color]
+# Custom colors
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+# Clean tmp directory on exit
+clean_on_exit = false
+
+# Enable live reload for browser (not needed for API)
+live_reload = false

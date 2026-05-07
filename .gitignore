@@ -49,3 +49,7 @@ plugins/*.wasm
 # Build
 dist/
 build/
+tmp/
+
+# Air live reload
+air.log
