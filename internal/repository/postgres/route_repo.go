@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/presidendjakarta/setu-gateway/pkg/types"
 )
@@ -302,8 +301,8 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 	var routes []*types.Route
 	for rows.Next() {
 		route := &types.Route{}
-		// Use pgtype.Bytes for nullable JSONB fields
-		var transformData pgtype.Bytes
+		// Use pointer to []byte for nullable JSONB fields
+		var transformBytes *[]byte
 		
 		err := rows.Scan(
 			&route.ID,
@@ -320,7 +319,7 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 			&route.AuthChain,
 			&route.Plugins,
 			&route.RateLimitID,
-			&transformData,
+			&transformBytes,
 			&route.Timeout,
 			&route.RetryEnabled,
 			&route.CircuitBreaker,
@@ -332,8 +331,8 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 		}
 		
 		// Unmarshal transform_config if not null
-		if transformData.Valid && len(transformData.Bytes) > 0 {
-			if err := json.Unmarshal(transformData.Bytes, &route.Transform); err != nil {
+		if transformBytes != nil && len(*transformBytes) > 0 {
+			if err := json.Unmarshal(*transformBytes, &route.Transform); err != nil {
 				return nil, fmt.Errorf("failed to unmarshal transform_config: %w", err)
 			}
 		}
