@@ -13,7 +13,9 @@ import (
 	"github.com/presidendjakarta/setu-gateway/internal/database"
 	"github.com/presidendjakarta/setu-gateway/internal/gateway"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
+	"github.com/presidendjakarta/setu-gateway/internal/observability"
 	"github.com/presidendjakarta/setu-gateway/internal/repository/postgres"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -84,6 +86,39 @@ func main() {
 		log.Fatalw("Failed to reload routes", "error", err)
 	}
 
+	// Initialize observability
+	metrics := observability.NewMetrics()
+	healthChecker := observability.NewHealthChecker()
+
+	// Register health checks
+	healthChecker.RegisterCheck("database", func(ctx context.Context) observability.HealthStatus {
+		if db.Health(ctx) {
+			stats := db.Stats()
+			return observability.HealthStatus{
+				Status:  "healthy",
+				Message: "Database connection OK",
+				Details: map[string]interface{}{
+					"total_conns":  stats["total_conns"],
+					"idle_conns":   stats["idle_conns"],
+					"acquired_conns": stats["acquired_conns"],
+				},
+			}
+		}
+		return observability.HealthStatus{
+			Status:  "unhealthy",
+			Message: "Database connection failed",
+		}
+	})
+
+	// Update goroutine metrics periodically
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for range ticker.C {
+			metrics.UpdateGoroutines(0) // Will be implemented
+		}
+	}()
+
 	// Start config watcher for hot-reload
 	if err := cfg.Watch(configPath); err != nil {
 		log.Warnw("Failed to start config watcher", "error", err)
@@ -126,7 +161,7 @@ func main() {
 
 	// Start metrics server if enabled
 	if rawConfig.Metrics.Enabled {
-		go startMetricsServer(rawConfig, log)
+		go startMetricsServer(rawConfig, log, metrics, healthChecker)
 	}
 
 	log.Infow("Gateway is ready to accept requests")
@@ -177,16 +212,31 @@ func startAdminServer(cfg *config.RawConfig, log *logger.Logger) {
 }
 
 // startMetricsServer starts the Prometheus metrics server
-func startMetricsServer(cfg *config.RawConfig, log *logger.Logger) {
+func startMetricsServer(cfg *config.RawConfig, log *logger.Logger, metrics *observability.Metrics, healthChecker *observability.HealthChecker) {
 	addr := fmt.Sprintf(":%d", cfg.Metrics.Port)
 	
 	mux := http.NewServeMux()
 	
-	// Metrics endpoint
-	mux.HandleFunc(cfg.Metrics.Path, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain")
+	// Prometheus metrics endpoint
+	mux.Handle(cfg.Metrics.Path, promhttp.Handler())
+	
+	// Health check endpoints
+	mux.HandleFunc("/health", healthChecker.WriteHealthCheck)
+	mux.HandleFunc("/ready", healthChecker.WriteReady)
+	mux.HandleFunc("/live", healthChecker.WriteLive)
+	
+	// Root endpoint with server info
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("# Prometheus metrics will be exposed here"))
+		fmt.Fprintf(w, `{
+			"service": "setu-gateway",
+			"version": "%s",
+			"metrics_path": "%s",
+			"health_path": "/health",
+			"ready_path": "/ready",
+			"live_path": "/live"
+		}`, cfg.Gateway.Version, cfg.Metrics.Path)
 	})
 
 	srv := &http.Server{
