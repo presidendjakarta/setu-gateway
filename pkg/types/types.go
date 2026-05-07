@@ -223,6 +223,9 @@ type AuthResult struct {
 	Metadata      map[string]string
 }
 
+// AuthResultKey is the context key for auth result
+type AuthResultKey struct{}
+
 // GatewayContext extends context.Context with request-specific data
 type GatewayContext interface {
 	context.Context

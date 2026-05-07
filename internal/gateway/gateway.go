@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	authpkg "github.com/presidendjakarta/setu-gateway/internal/auth"
+	authproviders "github.com/presidendjakarta/setu-gateway/internal/auth/providers"
 	"github.com/presidendjakarta/setu-gateway/internal/config"
 	"github.com/presidendjakarta/setu-gateway/internal/loadbalancer"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
@@ -27,6 +29,7 @@ type Gateway struct {
 	lbs        map[string]*loadbalancer.RoundRobin
 	lbsMu      sync.RWMutex
 	mwChain    *middleware.Chain
+	authMgr    *authpkg.Manager
 }
 
 // New creates a new gateway instance
@@ -44,6 +47,17 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	mwChain.Use(middleware.NewLogger(log))
 	mwChain.Use(middleware.NewCORS())
 
+	// Create auth manager
+	authMgr := authpkg.NewManager(log)
+	
+	// Register default auth providers
+	authMgr.RegisterProvider(authproviders.NewJWTProvider("jwt", types.AuthConfig{}, log))
+	authMgr.RegisterProvider(authproviders.NewAPIKeyProvider("api_key", types.AuthConfig{}, log))
+	
+	// Create auth middleware
+	authMiddleware := middleware.NewAuth(authMgr, log)
+	mwChain.Use(authMiddleware)
+
 	return &Gateway{
 		router:  r,
 		proxy:   p,
@@ -51,6 +65,7 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 		logger:  log,
 		lbs:     make(map[string]*loadbalancer.RoundRobin),
 		mwChain: mwChain,
+		authMgr: authMgr,
 	}, nil
 }
 
