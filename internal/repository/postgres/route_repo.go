@@ -2,11 +2,13 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/presidendjakarta/setu-gateway/pkg/types"
 )
@@ -78,6 +80,8 @@ func (r *routeRepo) GetByID(ctx context.Context, id string) (*types.Route, error
 	`
 
 	route := &types.Route{}
+	var transformBytes []byte
+	
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&route.ID,
 		&route.Name,
@@ -93,7 +97,7 @@ func (r *routeRepo) GetByID(ctx context.Context, id string) (*types.Route, error
 		&route.AuthChain,
 		&route.Plugins,
 		&route.RateLimitID,
-		&route.Transform,
+		&transformBytes,
 		&route.Timeout,
 		&route.RetryEnabled,
 		&route.CircuitBreaker,
@@ -106,6 +110,13 @@ func (r *routeRepo) GetByID(ctx context.Context, id string) (*types.Route, error
 			return nil, fmt.Errorf("route not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to get route: %w", err)
+	}
+	
+	// Unmarshal transform_config if not null
+	if transformBytes != nil && len(transformBytes) > 0 {
+		if err := json.Unmarshal(transformBytes, &route.Transform); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal transform_config: %w", err)
+		}
 	}
 
 	return route, nil
@@ -132,6 +143,8 @@ func (r *routeRepo) GetByPath(ctx context.Context, path string) ([]*types.Route,
 	var routes []*types.Route
 	for rows.Next() {
 		route := &types.Route{}
+		var transformBytes []byte
+		
 		err := rows.Scan(
 			&route.ID,
 			&route.Name,
@@ -147,7 +160,7 @@ func (r *routeRepo) GetByPath(ctx context.Context, path string) ([]*types.Route,
 			&route.AuthChain,
 			&route.Plugins,
 			&route.RateLimitID,
-			&route.Transform,
+			&transformBytes,
 			&route.Timeout,
 			&route.RetryEnabled,
 			&route.CircuitBreaker,
@@ -157,6 +170,14 @@ func (r *routeRepo) GetByPath(ctx context.Context, path string) ([]*types.Route,
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan route: %w", err)
 		}
+		
+		// Unmarshal transform_config if not null
+		if transformBytes != nil && len(transformBytes) > 0 {
+			if err := json.Unmarshal(transformBytes, &route.Transform); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal transform_config: %w", err)
+			}
+		}
+		
 		routes = append(routes, route)
 	}
 
@@ -281,6 +302,9 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 	var routes []*types.Route
 	for rows.Next() {
 		route := &types.Route{}
+		// Use pgtype.Bytes for nullable JSONB fields
+		var transformData pgtype.Bytes
+		
 		err := rows.Scan(
 			&route.ID,
 			&route.Name,
@@ -296,7 +320,7 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 			&route.AuthChain,
 			&route.Plugins,
 			&route.RateLimitID,
-			&route.Transform,
+			&transformData,
 			&route.Timeout,
 			&route.RetryEnabled,
 			&route.CircuitBreaker,
@@ -306,6 +330,14 @@ func (r *routeRepo) queryRoutes(ctx context.Context, query string, args ...inter
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan route: %w", err)
 		}
+		
+		// Unmarshal transform_config if not null
+		if transformData.Valid && len(transformData.Bytes) > 0 {
+			if err := json.Unmarshal(transformData.Bytes, &route.Transform); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal transform_config: %w", err)
+			}
+		}
+		
 		routes = append(routes, route)
 	}
 
