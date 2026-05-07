@@ -1,0 +1,51 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+setu-gateway
+setu-gateway.exe
+dist/
+
+# Test binary
+*.test
+
+# Output of the go coverage tool
+coverage.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+logs/
+
+# Plugins (WASM modules)
+plugins/*.wasm
+
+# Database
+*.db
+*.sqlite
+
+# Docker
+.dockerenv
+
+# Build
+dist/
+build/

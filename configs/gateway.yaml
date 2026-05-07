@@ -1,0 +1,132 @@
+# Setu API Gateway Configuration
+
+gateway:
+  name: setu-gateway
+  version: 1.0.0
+  
+server:
+  host: 0.0.0.0
+  port: 8080
+  read_timeout: 30s
+  write_timeout: 30s
+  idle_timeout: 120s
+  max_header_bytes: 1048576  # 1MB
+  
+  tls:
+    enabled: false
+    cert_file: ""
+    key_file: ""
+    min_version: "1.2"
+
+admin:
+  enabled: true
+  port: 8081
+  host: 0.0.0.0
+  api_key: "change-me-in-production"
+  allowed_ips: []
+
+database:
+  postgres:
+    host: 172.16.100.250
+    port: 5432
+    name: setu_gateway
+    user: setu_gateway
+    password: setu_gateway1324!!
+    ssl_mode: disable
+    max_open_conns: 25
+    max_idle_conns: 5
+    conn_max_lifetime: 5m
+    conn_max_idle_time: 1m
+
+cache:
+  enabled: true
+  type: memory  # memory or redis
+  ttl: 300s
+  max_items: 10000
+  
+  redis:
+    host: localhost
+    port: 6379
+    password: ""
+    db: 8
+    pool_size: 10
+
+logging:
+  level: info  # debug, info, warn, error
+  format: json  # json or console
+  output: stdout  # stdout or file path
+  access_log: true
+  access_log_format: json
+
+tracing:
+  enabled: false
+  service_name: setu-gateway
+  exporter: jaeger  # jaeger, zipkin, otlp
+  endpoint: http://localhost:14268/api/traces
+  sampling_ratio: 1.0
+
+metrics:
+  enabled: true
+  port: 9090
+  path: /metrics
+  namespace: setu
+  subsystem: gateway
+
+health:
+  enabled: true
+  path: /health
+  readiness_path: /ready
+  liveness_path: /live
+  upstream_check_interval: 30s
+  upstream_check_timeout: 5s
+
+rate_limit:
+  enabled: true
+  default_rps: 100
+  default_burst: 50
+  store_type: memory  # memory or redis
+
+circuit_breaker:
+  enabled: true
+  failure_threshold: 5
+  success_threshold: 3
+  timeout: 60s
+  half_open_max: 3
+
+proxy:
+  transport:
+    max_idle_conns: 1000
+    max_idle_conns_per_host: 100
+    max_conns_per_host: 0
+    idle_conn_timeout: 90s
+    tls_handshake_timeout: 10s
+    response_header_timeout: 30s
+    expect_continue_timeout: 1s
+    disable_keep_alives: false
+    disable_compression: false
+    
+  websocket:
+    enabled: true
+    read_buffer_size: 4096
+    write_buffer_size: 4096
+    handshake_timeout: 10s
+    
+  grpc:
+    enabled: true
+    max_request_header_list_size: 16384
+    
+retry:
+  enabled: true
+  max_retries: 3
+  backoff_base: 100ms
+  backoff_max: 10s
+  backoff_multiplier: 2.0
+  retryable_status_codes:
+    - 502
+    - 503
+    - 504
+
+plugins:
+  enabled: true
+  directory: ./plugins
+  wasm_enabled: false
