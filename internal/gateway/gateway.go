@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	authpkg "github.com/presidendjakarta/setu-gateway/internal/auth"
 	authproviders "github.com/presidendjakarta/setu-gateway/internal/auth/providers"
+	"github.com/presidendjakarta/setu-gateway/internal/circuitbreaker"
 	"github.com/presidendjakarta/setu-gateway/internal/config"
 	"github.com/presidendjakarta/setu-gateway/internal/loadbalancer"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
@@ -23,15 +24,16 @@ import (
 
 // Gateway is the main gateway handler
 type Gateway struct {
-	router     *router.Router
-	proxy      *proxy.Proxy
-	config     *config.RawConfig
-	logger     *logger.Logger
-	lbs        map[string]*loadbalancer.RoundRobin
-	lbsMu      sync.RWMutex
-	mwChain    *middleware.Chain
-	authMgr    *authpkg.Manager
-	rateLimiter *ratelimiter.Manager
+	router        *router.Router
+	proxy         *proxy.Proxy
+	config        *config.RawConfig
+	logger        *logger.Logger
+	lbs           map[string]*loadbalancer.RoundRobin
+	lbsMu         sync.RWMutex
+	mwChain       *middleware.Chain
+	authMgr       *authpkg.Manager
+	rateLimiter   *ratelimiter.Manager
+	circuitBreaker *circuitbreaker.Manager
 }
 
 // New creates a new gateway instance
@@ -63,15 +65,19 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	// Create rate limiter manager
 	rateLimiterMgr := ratelimiter.NewManager(log)
 
+	// Create circuit breaker manager
+	circuitBreakerMgr := circuitbreaker.NewManager(log)
+
 	return &Gateway{
-		router:  r,
-		proxy:   p,
-		config:  cfg,
-		logger:  log,
-		lbs:     make(map[string]*loadbalancer.RoundRobin),
-		mwChain: mwChain,
-		authMgr: authMgr,
-		rateLimiter: rateLimiterMgr,
+		router:        r,
+		proxy:         p,
+		config:        cfg,
+		logger:        log,
+		lbs:           make(map[string]*loadbalancer.RoundRobin),
+		mwChain:       mwChain,
+		authMgr:       authMgr,
+		rateLimiter:   rateLimiterMgr,
+		circuitBreaker: circuitBreakerMgr,
 	}, nil
 }
 
