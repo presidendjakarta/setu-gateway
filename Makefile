@@ -1,4 +1,4 @@
-.PHONY: help build run test clean setup migrate docker-up docker-down
+.PHONY: help build run test clean setup migrate docker-up docker-down test-coverage benchmark
 
 # Default target
 help:
@@ -6,16 +6,26 @@ help:
 	@echo "Setu API Gateway - Make Commands"
 	@echo "===================================="
 	@echo ""
-	@echo "Available commands:"
+	@echo "Build & Run:"
 	@echo "  make setup      - Setup dependencies and database"
 	@echo "  make build      - Build the gateway binary"
 	@echo "  make run        - Run the gateway"
-	@echo "  make test       - Run tests"
+	@echo "  make dev        - Run with live reload (requires air)"
 	@echo "  make clean      - Clean build artifacts"
+	@echo ""
+	@echo "Testing:"
+	@echo "  make test       - Run all tests"
+	@echo "  make test-verbose - Run tests with verbose output"
+	@echo "  make test-coverage - Run tests with coverage report"
+	@echo "  make benchmark  - Run benchmarks"
+	@echo "  make test-race  - Run tests with race detector"
+	@echo ""
+	@echo "Database:"
 	@echo "  make migrate    - Run database migrations"
+	@echo ""
+	@echo "Docker:"
 	@echo "  make docker-up  - Start Docker Compose services"
 	@echo "  make docker-down - Stop Docker Compose services"
-	@echo "  make dev        - Run with live reload (requires air)"
 	@echo ""
 
 # Setup dependencies and database
@@ -53,13 +63,38 @@ run: build
 	@echo "Starting Setu Gateway..."
 	./setu-gateway
 
-# Run tests
+# Run all tests
 test:
 	@echo "Running tests..."
-	go test -v -race -coverprofile=coverage.out ./...
+	go test ./... -v
+
+# Run tests with verbose output
+test-verbose:
+	@echo "Running tests with verbose output..."
+	go test ./... -v -count=1
+
+# Run tests with coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	go test ./... -coverprofile=coverage.out
 	@echo ""
 	@echo "Generating coverage report..."
+	go tool cover -func=coverage.out
+	@echo ""
+	@echo "HTML report generated: coverage.html"
 	go tool cover -html=coverage.out -o coverage.html
+
+# Run benchmarks
+benchmark:
+	@echo "Running benchmarks..."
+	go test ./internal/router -bench=BenchmarkRouter -benchmem -count=1
+	@echo ""
+	go test ./internal/loadbalancer -bench=BenchmarkRoundRobin -benchmem -count=1 2>/dev/null || echo "No LB benchmarks yet"
+
+# Run tests with race detector
+test-race:
+	@echo "Running tests with race detector..."
+	go test ./... -race -v
 	@echo "Coverage report: coverage.html"
 
 # Run specific test
