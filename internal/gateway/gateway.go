@@ -12,6 +12,7 @@ import (
 	"github.com/presidendjakarta/setu-gateway/internal/config"
 	"github.com/presidendjakarta/setu-gateway/internal/loadbalancer"
 	"github.com/presidendjakarta/setu-gateway/internal/logger"
+	"github.com/presidendjakarta/setu-gateway/internal/middleware"
 	"github.com/presidendjakarta/setu-gateway/internal/proxy"
 	"github.com/presidendjakarta/setu-gateway/internal/router"
 	"github.com/presidendjakarta/setu-gateway/pkg/types"
@@ -19,12 +20,13 @@ import (
 
 // Gateway is the main gateway handler
 type Gateway struct {
-	router  *router.Router
-	proxy   *proxy.Proxy
-	config  *config.RawConfig
-	logger  *logger.Logger
-	lbs     map[string]*loadbalancer.RoundRobin
-	lbsMu   sync.RWMutex
+	router     *router.Router
+	proxy      *proxy.Proxy
+	config     *config.RawConfig
+	logger     *logger.Logger
+	lbs        map[string]*loadbalancer.RoundRobin
+	lbsMu      sync.RWMutex
+	mwChain    *middleware.Chain
 }
 
 // New creates a new gateway instance
@@ -35,26 +37,45 @@ func New(cfg *config.RawConfig, log *logger.Logger) (*Gateway, error) {
 	// Create proxy
 	p := proxy.New(&cfg.Proxy)
 
+	// Create middleware chain
+	mwChain := middleware.New()
+	mwChain.Use(middleware.NewRecovery(log))
+	mwChain.Use(middleware.NewRequestID())
+	mwChain.Use(middleware.NewLogger(log))
+	mwChain.Use(middleware.NewCORS())
+
 	return &Gateway{
-		router: r,
-		proxy:  p,
-		config: cfg,
-		logger: log,
-		lbs:    make(map[string]*loadbalancer.RoundRobin),
+		router:  r,
+		proxy:   p,
+		config:  cfg,
+		logger:  log,
+		lbs:     make(map[string]*loadbalancer.RoundRobin),
+		mwChain: mwChain,
 	}, nil
 }
 
 // ServeHTTP handles incoming HTTP requests
 func (g *Gateway) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Build handler with middleware
+	handler := g.mwChain.Build(http.HandlerFunc(g.handleRequest))
+	handler.ServeHTTP(w, r)
+}
+
+// handleRequest is the main request handler (wrapped by middleware)
+func (g *Gateway) handleRequest(w http.ResponseWriter, r *http.Request) {
 	startTime := time.Now()
-	requestID := uuid.New().String()
+	
+	// Get request ID from middleware
+	requestID := middleware.GetRequestID(r.Context())
+	if requestID == "" {
+		requestID = uuid.New().String()
+	}
 
 	// Add request ID to context
 	ctx := context.WithValue(r.Context(), "request_id", requestID)
 	r = r.WithContext(ctx)
 
-	// Set common response headers
-	w.Header().Set("X-Request-ID", requestID)
+	// Set gateway header
 	w.Header().Set("X-Gateway", "setu-gateway")
 
 	// Health check endpoints (don't require routing)
